@@ -1,9 +1,19 @@
-cat > .gitignore <<'EOF'
+# Python
 myenv/
 __pycache__/
 *.pyc
-.env
 
-node_modules/
+# Node / React
 frontend/node_modules/
-EOF
+frontend/node_modules/.cache/
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build output
+build/
+dist/
+
+# OS
+.DS_Store

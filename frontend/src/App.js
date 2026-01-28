@@ -1,370 +1,323 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import "./App.css";
-import TaglineSection from "./TaglineSection";
 
 const api = axios.create({
-  baseURL: "http://localhost:8000",
+  baseURL: "http://127.0.0.1:8000",
 });
 
 function App() {
-  const [products, setProducts] = useState([]);
-  const [form, setForm] = useState({
-    id: "",
-    name: "",
-    description: "",
-    price: "",
-    quantity: "",
-  });
+  const [vehicles, setVehicles] = useState([]);
+  const [form, setForm] = useState({ id: "", name: "", description: "", price: "", quantity: "" });
   const [editId, setEditId] = useState(null);
+
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
   const [filter, setFilter] = useState("");
   const [sortField, setSortField] = useState("id");
   const [sortDirection, setSortDirection] = useState("asc");
 
-  // Auto-dismiss messages after 5 seconds
   useEffect(() => {
-    if (message) {
-      const timer = setTimeout(() => {
-        setMessage("");
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
+    if (!message) return;
+    const t = setTimeout(() => setMessage(""), 4000);
+    return () => clearTimeout(t);
   }, [message]);
 
   useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => {
-        setError("");
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
+    if (!error) return;
+    const t = setTimeout(() => setError(""), 5000);
+    return () => clearTimeout(t);
   }, [error]);
 
-  // Fetch all products
-  const fetchProducts = async () => {
+  const fetchVehicles = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/products/");
-      setProducts(res.data);
+      const res = await api.get("/vehicles");
+      setVehicles(res.data);
       setError("");
-    } catch (err) {
-      setError("Failed to fetch products");
+    } catch (e) {
+      setError("Failed to fetch vehicles (check backend is running + CORS).");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
-    // Inline initial fetch to avoid referencing external deps
-    const run = async () => {
-      setLoading(true);
-      try {
-        const res = await api.get("/products/");
-        setProducts(res.data);
-        setError("");
-      } catch (err) {
-        setError("Failed to fetch products");
-      }
-      setLoading(false);
-    };
-    run();
+    fetchVehicles();
   }, []);
 
-  // Handle sorting
   const handleSort = (field) => {
     if (sortField === field) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+      setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
     } else {
       setSortField(field);
       setSortDirection("asc");
     }
   };
 
-  // Derived list with filter and sorting
-  const filteredProducts = useMemo(() => {
-    let filtered = products;
-    
-    // Apply filter
+  const filteredVehicles = useMemo(() => {
     const q = filter.trim().toLowerCase();
+
+    let list = [...vehicles];
+
     if (q) {
-      filtered = products.filter((p) =>
-        String(p.id).includes(q) ||
-        p.name?.toLowerCase().includes(q) ||
-        p.description?.toLowerCase().includes(q)
+      list = list.filter((v) =>
+        String(v.id).includes(q) ||
+        (v.name || "").toLowerCase().includes(q) ||
+        (v.description || "").toLowerCase().includes(q)
       );
     }
-    
-    // Apply sorting
-    return filtered.sort((a, b) => {
+
+    list.sort((a, b) => {
       let aVal = a[sortField];
       let bVal = b[sortField];
-      
-      // Handle numeric fields
-      if (sortField === "id" || sortField === "price" || sortField === "quantity") {
+
+      if (["id", "price", "quantity"].includes(sortField)) {
         aVal = Number(aVal);
         bVal = Number(bVal);
       } else {
-        // Handle string fields
-        aVal = String(aVal).toLowerCase();
-        bVal = String(bVal).toLowerCase();
+        aVal = String(aVal || "").toLowerCase();
+        bVal = String(bVal || "").toLowerCase();
       }
-      
+
       if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
       if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
       return 0;
     });
-  }, [products, filter, sortField, sortDirection]);
 
-  // Handle form input
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
+    return list;
+  }, [vehicles, filter, sortField, sortDirection]);
 
-  // Reset form
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
   const resetForm = () => {
     setForm({ id: "", name: "", description: "", price: "", quantity: "" });
     setEditId(null);
   };
 
-  // Create or update product
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setMessage("");
     setError("");
+
+    const payload = {
+      id: Number(form.id),
+      name: form.name.trim(),
+      description: form.description.trim(),
+      price: Number(form.price),
+      quantity: Number(form.quantity),
+    };
+
     try {
-      if (editId) {
-        await api.put(`/products/${editId}`, {
-          ...form,
-          id: Number(form.id),
-          price: Number(form.price),
-          quantity: Number(form.quantity),
-        });
-        setMessage("Product updated successfully");
+      if (editId !== null) {
+        await api.put(`/vehicles/${editId}`, payload);
+        setMessage("Vehicle updated successfully ✅");
       } else {
-        await api.post("/products/", {
-          ...form,
-          id: Number(form.id),
-          price: Number(form.price),
-          quantity: Number(form.quantity),
-        });
-        setMessage("Product created successfully");
+        await api.post("/vehicles", payload);
+        setMessage("Vehicle created successfully ✅");
       }
       resetForm();
-      fetchProducts();
+      await fetchVehicles();
     } catch (err) {
       setError(err.response?.data?.detail || "Operation failed");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  // Edit product
-  const handleEdit = (product) => {
+  const handleEdit = (v) => {
     setForm({
-      id: product.id,
-      name: product.name,
-      description: product.description,
-      price: product.price,
-      quantity: product.quantity,
+      id: v.id,
+      name: v.name,
+      description: v.description,
+      price: v.price,
+      quantity: v.quantity,
     });
-    setEditId(product.id);
+    setEditId(v.id);
     setMessage("");
     setError("");
   };
 
-  // Delete product
   const handleDelete = async (id) => {
-    const ok = window.confirm("Delete this product?");
+    const ok = window.confirm("Delete this vehicle?");
     if (!ok) return;
+
     setLoading(true);
     setMessage("");
     setError("");
+
     try {
-      await api.delete(`/products/${id}`);
-      setMessage("Product deleted successfully");
-      fetchProducts();
-    } catch (err) {
+      await api.delete(`/vehicles/${id}`);
+      setMessage("Vehicle deleted ✅");
+      await fetchVehicles();
+    } catch (e) {
       setError("Delete failed");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  const currency = (n) =>
-    typeof n === "number" ? n.toFixed(2) : Number(n || 0).toFixed(2);
-
   return (
-    <div className="app-bg">
-      <header className="topbar">
+    <div className="bg">
+      <header className="header">
         <div className="brand">
-          <span className="brand-badge">📦</span>
-          <h1>Telusko Trac</h1>
+          <div className="logo">AK</div>
+          <div>
+            <h1>AK Fast Track Vehicles</h1>
+            <p>FastAPI + PostgreSQL CRUD Dashboard</p>
+          </div>
         </div>
-        <div className="top-actions">
-          <button className="btn btn-light" onClick={fetchProducts} disabled={loading}>
-            Refresh
-          </button>
-        </div>
+
+        <button className="btn btn-ghost" onClick={fetchVehicles} disabled={loading}>
+          Refresh
+        </button>
       </header>
 
-      <div className="container">
-        <div className="stats">
-          <div className="chip">Total: {products.length}</div>
-          <div className="search">
+      <main className="wrap">
+        <section className="panel">
+          <div className="panel-head">
+            <h2>{editId !== null ? "Edit Vehicle" : "Add Vehicle"}</h2>
+            <div className="pill">Total: {vehicles.length}</div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="form">
+            <div className="grid">
+              <div className="field">
+                <label>ID</label>
+                <input
+                  type="number"
+                  name="id"
+                  value={form.id}
+                  onChange={handleChange}
+                  required
+                  disabled={editId !== null}
+                  placeholder="e.g. 10"
+                />
+              </div>
+
+              <div className="field">
+                <label>Name</label>
+                <input
+                  type="text"
+                  name="name"
+                  value={form.name}
+                  onChange={handleChange}
+                  required
+                  placeholder="e.g. Tesla Model 3"
+                />
+              </div>
+
+              <div className="field full">
+                <label>Description</label>
+                <input
+                  type="text"
+                  name="description"
+                  value={form.description}
+                  onChange={handleChange}
+                  required
+                  placeholder="Short description..."
+                />
+              </div>
+
+              <div className="field">
+                <label>Price</label>
+                <input
+                  type="number"
+                  name="price"
+                  value={form.price}
+                  onChange={handleChange}
+                  required
+                  placeholder="e.g. 25000"
+                />
+              </div>
+
+              <div className="field">
+                <label>Quantity</label>
+                <input
+                  type="number"
+                  name="quantity"
+                  value={form.quantity}
+                  onChange={handleChange}
+                  required
+                  placeholder="e.g. 5"
+                />
+              </div>
+            </div>
+
+            <div className="actions">
+              <button className="btn btn-primary" type="submit" disabled={loading}>
+                {editId !== null ? "Update" : "Add"}
+              </button>
+
+              {editId !== null && (
+                <button className="btn btn-soft" type="button" onClick={resetForm}>
+                  Cancel
+                </button>
+              )}
+            </div>
+
+            {message && <div className="toast ok">{message}</div>}
+            {error && <div className="toast err">{error}</div>}
+          </form>
+        </section>
+
+        <section className="panel">
+          <div className="panel-head">
+            <h2>Vehicles</h2>
+
             <input
-              type="text"
-              placeholder="Search by id, name or description..."
+              className="search"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
+              placeholder="Search by id, name, description..."
             />
           </div>
-        </div>
 
-        <div className="content-grid">
-          <div className="card form-card">
-            <h2>{editId ? "Edit Product" : "Add Product"}</h2>
-            <form onSubmit={handleSubmit} className="product-form">
-              <input
-                type="number"
-                name="id"
-                placeholder="ID"
-                value={form.id}
-                onChange={handleChange}
-                required
-                disabled={!!editId}
-              />
-              <input
-                type="text"
-                name="name"
-                placeholder="Name"
-                value={form.name}
-                onChange={handleChange}
-                required
-              />
-              <input
-                type="text"
-                name="description"
-                placeholder="Description"
-                value={form.description}
-                onChange={handleChange}
-                required
-              />
-              <input
-                type="number"
-                name="price"
-                placeholder="Price"
-                value={form.price}
-                onChange={handleChange}
-                required
-                step="0.01"
-              />
-              <input
-                type="number"
-                name="quantity"
-                placeholder="Quantity"
-                value={form.quantity}
-                onChange={handleChange}
-                required
-              />
-              <div className="form-actions">
-                <button className="btn" type="submit" disabled={loading}>
-                  {editId ? "Update" : "Add"}
-                </button>
-                {editId && (
-                  <button
-                    className="btn btn-secondary"
-                    type="button"
-                    onClick={() => {
-                      resetForm();
-                      setMessage("");
-                      setError("");
-                    }}
-                  >
-                    Cancel
-                  </button>
-                )}
-              </div>
-            </form>
-            {message && <div className="success-msg">{message}</div>}
-            {error && <div className="error-msg">{error}</div>}
-          </div>
-          
-          <TaglineSection />
-
-          <div className="card list-card">
-            <h2>Products</h2>
+          <div className="tableWrap">
             {loading ? (
-              <div className="loader">Loading...</div>
+              <div className="loading">Loading…</div>
             ) : (
-              <div className="scroll-x">
-                <table className="product-table">
-                  <thead>
-                    <tr>
-                      <th 
-                        className={`sortable ${sortField === 'id' ? `sort-${sortDirection}` : ''}`}
-                        onClick={() => handleSort('id')}
-                      >
-                        ID
-                      </th>
-                      <th 
-                        className={`sortable ${sortField === 'name' ? `sort-${sortDirection}` : ''}`}
-                        onClick={() => handleSort('name')}
-                      >
-                        Name
-                      </th>
-                      <th>Description</th>
-                      <th 
-                        className={`sortable ${sortField === 'price' ? `sort-${sortDirection}` : ''}`}
-                        onClick={() => handleSort('price')}
-                      >
-                        Price
-                      </th>
-                      <th 
-                        className={`sortable ${sortField === 'quantity' ? `sort-${sortDirection}` : ''}`}
-                        onClick={() => handleSort('quantity')}
-                      >
-                        Quantity
-                      </th>
-                      <th>Actions</th>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th onClick={() => handleSort("id")} className="sortable">ID</th>
+                    <th onClick={() => handleSort("name")} className="sortable">Name</th>
+                    <th>Description</th>
+                    <th onClick={() => handleSort("price")} className="sortable">Price</th>
+                    <th onClick={() => handleSort("quantity")} className="sortable">Qty</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {filteredVehicles.map((v) => (
+                    <tr key={v.id}>
+                      <td>{v.id}</td>
+                      <td className="strong">{v.name}</td>
+                      <td className="muted">{v.description}</td>
+                      <td>LKR {Number(v.price).toLocaleString()}</td>
+                      <td><span className="badge">{v.quantity}</span></td>
+                      <td className="rowBtns">
+                        <button className="btn btn-soft" onClick={() => handleEdit(v)}>Edit</button>
+                        <button className="btn btn-danger" onClick={() => handleDelete(v.id)}>Delete</button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {filteredProducts.map((p) => (
-                      <tr key={p.id}>
-                        <td>{p.id}</td>
-                        <td className="name-cell">{p.name}</td>
-                        <td className="desc-cell" title={p.description}>{p.description}</td>
-                        <td className="price-cell">${currency(p.price)}</td>
-                        <td>
-                          <span className="qty-badge">{p.quantity}</span>
-                        </td>
-                        <td>
-                          <div className="row-actions">
-                            <button className="btn btn-edit" onClick={() => handleEdit(p)}>
-                              Edit
-                            </button>
-                            <button className="btn btn-delete" onClick={() => handleDelete(p.id)}>
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {filteredProducts.length === 0 && (
-                      <tr>
-                        <td colSpan={6} className="empty">
-                          No products found.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+
+                  {filteredVehicles.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="empty">No vehicles found.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             )}
           </div>
-        </div>
-      </div>
+        </section>
+      </main>
     </div>
   );
 }
