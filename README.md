@@ -1,3 +1,15 @@
+<img width="1470" height="601" alt="image" src="https://github.com/user-attachments/assets/3230c4f1-3ade-46e6-9d82-e814ff8902c8" />
+
+
+
+
+
+
+
+
+
+
+
 # AK Fast Track Vehicles 🚗⚡
 A full-stack CRUD application built with **FastAPI + PostgreSQL (SQLAlchemy)** and a **React** frontend to manage vehicle records (create, view, update, delete).
 
